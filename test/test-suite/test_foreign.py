@@ -509,15 +509,23 @@ class TestForeign:
         assert (self.rgba - after).abs().max() == 0
 
         # we should be able to save an 8-bit image as a 16-bit PNG
-        rgb = pyvips.Image.new_from_file(JPEG_FILE)
-        data = rgb.pngsave_buffer(bitdepth=16)
+        data = self.colour.pngsave_buffer(bitdepth=16)
         rgb16 = pyvips.Image.pngload_buffer(data)
         assert rgb16.format == "ushort"
 
-        # we should be able to save a 16-bit image as a 8-bit PNG
+        # we should be able to save a 16-bit image as an 8-bit PNG
         data = rgb16.pngsave_buffer(bitdepth=8)
         rgb = pyvips.Image.pngload_buffer(data)
         assert rgb.format == "uchar"
+
+        # we should be able to save a 16-bit image as an 8-bit WebP
+        if have("webpsave"):
+            data = rgb16.webpsave_buffer(lossless=True)
+            rgb = pyvips.Image.webpload_buffer(data)
+            assert rgb.format == "uchar"
+            # ... and check if it was correctly shifted down
+            # https://github.com/libvips/libvips/issues/4568
+            assert (self.colour - rgb).abs().max() == 0
 
     @skip_if_no("tiffload")
     def test_tiff(self):
@@ -798,6 +806,9 @@ class TestForeign:
 
         self.file_loader("magickload", BMP_FILE, bmp_valid)
         self.buffer_loader("magickload_buffer", BMP_FILE, bmp_valid)
+        source = pyvips.Source.new_from_file(BMP_FILE)
+        x = pyvips.Image.new_from_source(source, "")
+        bmp_valid(x)
 
         # we should have rgb or rgba for svg files ... different versions of
         # IM handle this differently. GM even gives 1 band.
@@ -869,10 +880,11 @@ class TestForeign:
         assert im.width == 433
         assert im.height == 433
 
-
         # load should see metadata like eg. icc profiles
         im = pyvips.Image.magickload(JPEG_FILE)
         assert len(im.get("icc-profile-data")) == 564
+
+        im = pyvips.Image.magickload(JPEG_FILE)
 
     # added in 8.7
     @skip_if_no("magicksave")
